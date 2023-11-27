@@ -1,7 +1,8 @@
+import shlex
+
 from django.db import models
 from contextlib import redirect_stdout, redirect_stderr
-from django.db import connection
-from django.core.management import execute_from_command_line
+from django.core.management import call_command
 from django.utils import timezone
 from django.conf import settings
 import io
@@ -30,13 +31,14 @@ class CommandRunInstance(models.Model):
         with redirect_stdout(io.StringIO()) as f_out:
             with redirect_stderr(io.StringIO()) as f_err:
                 try:
-                    execute_from_command_line(['./manage.py'] + self.command.split(' '))
+                    command = shlex.split(self.command)
+                    if len(command) > 1:
+                        call_command(command[0], *command[1:])
+                    else:
+                        call_command(command[0])
                 except (Exception, SystemExit) as e:
                     self.exception = str(e)
                 self.finished_at = timezone.now()
-                # restart the db connection required for db related commands that
-                # close the db connection (like migrate)
-                connection.connect()
 
                 self.stdout = f_out.getvalue()
                 self.stderr = f_err.getvalue()
